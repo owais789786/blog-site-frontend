@@ -1,0 +1,45 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Public+Sans:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+    --color-ink-950: #14161c;
+    --color-ink-900: #1c1f27;
+    --color-ink-700: #2a2e3a;
+
+    --color-paper-100: #eceef2;
+    --color-paper-400: #9296a6;
+
+    --color-ember-400: #d7a34c;
+    --color-ember-500: #c1893a;
+
+    --font-display: "Fraunces", serif;
+    --font-body: "Public Sans", sans-serif;
+}
+
+body {
+    font-family: var(--font-body);
+    background-color: var(--color-ink-950);
+    margin: 0;
+}
+
+.auth-shell {
+    position: relative;
+    overflow: hidden;
+    background-image: radial-gradient(circle at 15% 20%, rgba(215, 163, 76, 0.09), transparent 30%), linear-gradient(135deg, #14161c 0%, #171a22 52%, #111319 100%);
+}
+
+.auth-shell::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.22;
+    background-image: linear-gradient(rgba(236, 238, 242, 0.035) 1px, transparent 1px), linear-gradient(90deg, rgba(236, 238, 242, 0.035) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(to bottom, black, transparent 80%);
+}
+
+.auth-layout { position: relative; z-index: 1; }
+.auth-card { box-shadow: 0 24px 80px rgba(0, 0, 0, 0.24); }
+.eyebrow { font-size: 0.68rem; letter-spacing: 0.18em; text-transform: uppercase; }
+.google-mark { font-size: 1.05rem; font-weight: 600; line-height: 1; color: #4285f4; }
