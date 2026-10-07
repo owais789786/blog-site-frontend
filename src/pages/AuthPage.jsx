@@ -1,13 +1,17 @@
 import { useState } from 'react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, MotionConfig, motion } from 'motion/react';
+import { isAxiosError } from 'axios';
+import Logo from '../components/Logo';
+import { useAuthMutation } from '../features/auth/useAuthMutation';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:3000';
 
 export default function AuthPage({ onSubmit, onGoogleAuth }) {
     const [mode, setMode] = useState('login');
     const [showPassword, setShowPassword] = useState(false);
-    const [isSubmitting, setIsSubmitting] = useState(false);
-    const [message, setMessage] = useState('');
+    const [feedback, setFeedback] = useState(null);
+    const authMutation = useAuthMutation(onSubmit);
+    const isSubmitting = authMutation.isPending;
     const [form, setForm] = useState({
         firstName: '',
         lastName: '',
@@ -17,34 +21,52 @@ export default function AuthPage({ onSubmit, onGoogleAuth }) {
     });
 
     const inputClass =
-        'w-full bg-ink-950 border border-ink-700 rounded-md px-3 py-2 text-paper-100 text-sm focus:outline-none focus:border-ember-400';
+        'auth-input w-full rounded-xl border border-ink-700/80 bg-ink-950/70 px-4 py-3 text-sm text-paper-100 placeholder:text-paper-400/55 focus:outline-none';
 
     const handleChange = (event) => {
-        setForm({ ...form, [event.target.name]: event.target.value });
+        setForm((currentForm) => ({
+            ...currentForm,
+            [event.target.name]: event.target.value,
+        }));
     };
 
     const changeMode = (nextMode) => {
         setMode(nextMode);
-        setMessage('');
+        setFeedback(null);
+        authMutation.reset();
     };
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setMessage('');
+        setFeedback(null);
 
         if (mode === 'signup' && form.password !== form.confirmPassword) {
-            setMessage('Passwords do not match.');
+            setFeedback({ type: 'error', text: 'Passwords do not match.' });
             return;
         }
 
-        setIsSubmitting(true);
-
         try {
-            await onSubmit?.({ mode, ...form });
+            const result = await authMutation.mutateAsync({
+                mode,
+                firstName: form.firstName.trim(),
+                lastName: form.lastName.trim(),
+                email: form.email.trim(),
+                password: form.password,
+            });
+            setFeedback({
+                type: 'success',
+                text: result?.message || (mode === 'login' ? 'You are signed in.' : 'Your account has been created.'),
+            });
         } catch (error) {
-            setMessage(error.message || 'Something went wrong. Please try again.');
-        } finally {
-            setIsSubmitting(false);
+            const errorMessage = isAxiosError(error)
+                ? error.response?.data?.message
+                : error instanceof Error
+                  ? error.message
+                  : null;
+            setFeedback({
+                type: 'error',
+                text: errorMessage || 'Unable to connect. Please try again.',
+            });
         }
     };
 
@@ -57,139 +79,201 @@ export default function AuthPage({ onSubmit, onGoogleAuth }) {
     };
 
     return (
-        <main className="auth-shell min-h-screen bg-ink-950 flex items-center justify-center px-4 py-8 font-body">
-            <div className="auth-layout w-full max-w-5xl grid lg:grid-cols-[1.05fr_0.95fr] gap-8 lg:gap-16 items-center">
-
-                {/* Left side - intro text, hidden on small screens */}
+        <MotionConfig reducedMotion="user">
+        <main className="min-h-screen px-4 py-8 font-body text-paper-100 sm:px-6 lg:px-10">
+            <div className="auth-layout mx-auto grid min-h-[calc(100vh-4rem)] w-full max-w-6xl items-center gap-12 lg:grid-cols-[1fr_0.88fr] lg:gap-20">
                 <motion.section
                     initial={{ opacity: 0, x: -18 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ duration: 0.5 }}
-                    className="hidden lg:block px-4"
+                    className="hidden lg:sticky lg:top-8 lg:flex lg:min-h-155 lg:self-start lg:flex-col lg:justify-between lg:py-5"
                 >
-                    <p className="eyebrow text-ember-400 mb-6">A quieter place for ideas</p>
+                    <div>
+                        <Logo />
 
-                    <h1 className="font-display text-6xl xl:text-7xl leading-[0.95] text-paper-100 max-w-lg">
-                        Read deeply.
-                        <br />
-                        <span className="text-paper-400">Write freely.</span>
-                    </h1>
-
-                    <p className="mt-7 max-w-md text-paper-400 leading-relaxed">
-                        Join a thoughtful community of writers and curious minds. Your next great idea starts here.
-                    </p>
-
-                    <div className="mt-14 flex items-center gap-3 text-xs text-paper-400">
-                        <span className="h-px w-10 bg-ember-400" />
-                        <span>Stories worth keeping</span>
+                        <div className="mt-24 max-w-xl">
+                            <p className="eyebrow mb-5 flex items-center gap-3 text-ember-400">
+                                <span className="h-px w-7 bg-ember-400/70" />
+                                A quieter place for ideas
+                            </p>
+                            <h1 className="font-display text-6xl leading-[1.04] tracking-[-0.045em] text-paper-100 xl:text-7xl">
+                                Read deeply.
+                                <br />
+                                <span className="text-paper-400">Write freely.</span>
+                            </h1>
+                            <p className="mt-7 max-w-md text-base leading-7 text-paper-400">
+                                A thoughtful corner of the internet for stories, fresh perspectives, and the people who love them.
+                            </p>
+                        </div>
                     </div>
+
+                    <motion.div
+                        layout
+                        className="editorial-note max-w-md rounded-2xl border border-white/[0.07] p-6"
+                    >
+                        <div className="mb-5 flex items-center justify-between">
+                            <span className="eyebrow text-paper-400">
+                                {mode === 'login' ? 'The reading life' : 'A new chapter'}
+                            </span>
+                            <motion.span
+                                animate={{ rotate: mode === 'signup' ? 45 : 0 }}
+                                transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+                                className="text-ember-400"
+                                aria-hidden="true"
+                            >
+                                ✳
+                            </motion.span>
+                        </div>
+                        <div className="editorial-quote">
+                            <AnimatePresence mode="wait" initial={false}>
+                                <motion.p
+                                    key={mode}
+                                    initial={{ opacity: 0, y: 8 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -8 }}
+                                    transition={{ duration: 0.22 }}
+                                    className="font-display text-2xl leading-snug text-paper-100"
+                                >
+                                    {mode === 'login'
+                                        ? '“Every page is a place to begin again.”'
+                                        : '“The best stories start with a first line.”'}
+                                </motion.p>
+                            </AnimatePresence>
+                        </div>
+                        <div className="mt-6 flex items-center gap-3 text-xs text-paper-400">
+                            <span className="h-px w-8 bg-ember-400/70" />
+                            {mode === 'login' ? 'Stories worth keeping' : 'Make room for your voice'}
+                        </div>
+                    </motion.div>
                 </motion.section>
 
-                {/* Right side - auth card */}
-                <div className="w-full max-w-md mx-auto">
-
-                    {/* Mobile logo */}
+                <motion.div layout className="mx-auto w-full max-w-110 lg:self-start">
                     <motion.div
                         initial={{ opacity: 0, y: -10 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5 }}
-                        className="flex flex-col items-center select-none mb-8 lg:hidden"
+                        transition={{ duration: 0.4 }}
+                        className="mb-8 flex justify-center lg:hidden"
                     >
-                        <span className="font-display text-4xl text-paper-100 tracking-tight">
-                            Folio<span className="text-ember-400">.</span>
-                        </span>
-                        <span
-                            aria-hidden="true"
-                            className="font-display text-4xl text-paper-100 tracking-tight scale-y-[-1] opacity-30 -mt-1 [mask-image:linear-gradient(to_bottom,black,transparent_70%)]"
-                        >
-                            Folio<span className="text-ember-400">.</span>
-                        </span>
+                        <Logo />
                     </motion.div>
 
                     <motion.div
+                        layout
                         initial={{ opacity: 0, y: 12 }}
                         animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.4, delay: 0.1 }}
-                        className="auth-card bg-ink-900 border border-ink-700 rounded-lg p-6 sm:p-8"
+                        transition={{
+                            layout: { type: 'spring', stiffness: 150, damping: 24 },
+                            opacity: { duration: 0.45, delay: 0.08 },
+                            y: { duration: 0.45, delay: 0.08 },
+                        }}
+                        className="auth-card rounded-2xl border border-white/9 p-6 sm:p-9"
                     >
-                        {/* Header */}
-                        <div className="mb-7">
-                            <p className="eyebrow text-ember-400 mb-2">Welcome to Folio</p>
-                            <h2 className="font-display text-3xl text-paper-100">Your desk awaits.</h2>
-                            <p className="text-sm text-paper-400 mt-2">Sign in to continue your reading journey.</p>
+                        <div className="mb-8">
+                            <p className="eyebrow mb-3 text-ember-400">
+                                {mode === 'login' ? 'Welcome back' : 'Your next chapter'}
+                            </p>
+                            <h2 className="font-display text-3xl leading-tight tracking-tight text-paper-100 sm:text-[2.1rem]">
+                                {mode === 'login' ? 'Your desk awaits.' : 'Make yourself at home.'}
+                            </h2>
+                            <p className="mt-2 text-sm leading-6 text-paper-400">
+                                {mode === 'login'
+                                    ? 'Sign in and pick up right where you left off.'
+                                    : 'Create an account and make room for new ideas.'}
+                            </p>
                         </div>
 
-                        {/* Login / Signup tabs */}
-                        <div className="relative flex gap-6 mb-6 border-b border-ink-700">
+                        <div
+                            role="group"
+                            aria-label="Account access"
+                            className="mb-6 grid grid-cols-2 rounded-xl border border-white/[0.07] bg-ink-950/60 p-1"
+                        >
                             {['login', 'signup'].map((item) => (
                                 <button
                                     key={item}
                                     type="button"
+                                    aria-pressed={mode === item}
                                     onClick={() => changeMode(item)}
-                                    className={`relative pb-3 text-sm transition-colors ${
+                                    className={`relative rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
                                         mode === item ? 'text-paper-100' : 'text-paper-400 hover:text-paper-100'
                                     }`}
                                 >
-                                    {item === 'login' ? 'Log in' : 'Sign up'}
                                     {mode === item && (
-                                        <motion.div
-                                            layoutId="tab-underline"
-                                            className="absolute left-0 right-0 -bottom-[1px] h-[2px] bg-ember-400"
+                                        <motion.span
+                                            layoutId="auth-mode-indicator"
+                                            transition={{ type: 'spring', stiffness: 360, damping: 30 }}
+                                            className="absolute inset-0 rounded-lg bg-ink-700/70 shadow-sm"
+                                            aria-hidden="true"
                                         />
                                     )}
+                                    <span className="relative z-10">
+                                        {item === 'login' ? 'Log in' : 'Create account'}
+                                    </span>
                                 </button>
                             ))}
                         </div>
 
-                        {/* Google auth button */}
                         <motion.button
                             type="button"
                             onClick={handleGoogleAuth}
                             whileHover={{ y: -1 }}
-                            whileTap={{ scale: 0.98 }}
-                            className="w-full flex items-center justify-center gap-3 border border-ink-700 bg-ink-950 text-paper-100 text-sm rounded-md py-2.5 transition-colors hover:border-paper-400"
+                            whileTap={{ scale: 0.99 }}
+                            className="auth-secondary-button flex w-full items-center justify-center gap-3 rounded-xl border border-ink-700/80 bg-white/2.5 py-3 text-sm font-medium text-paper-100 transition-colors hover:bg-white/6"
                         >
-                            <span className="google-mark" aria-hidden="true">G</span>
+                            <svg aria-hidden="true" viewBox="0 0 48 48" className="h-4.5 w-4.5">
+                                <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5Z" transform="translate(0 4)" />
+                                <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.74 7.18l7.73 6C44.43 37.93 46.98 31.88 46.98 24.55Z" transform="translate(0 -1)" />
+                                <path fill="#FBBC05" d="M10.53 28.59a14.4 14.4 0 0 1 0-9.18l-7.98-6.19a23.97 23.97 0 0 0 0 21.56l7.98-6.19Z" transform="translate(0 3)" />
+                                <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.91-5.8l-7.73-6c-2.15 1.45-4.92 2.3-8.18 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48Z" transform="translate(0 -3)" />
+                            </svg>
                             Continue with Google
                         </motion.button>
 
-                        {/* Divider */}
-                        <div className="flex items-center gap-3 my-6 text-[11px] uppercase tracking-[0.16em] text-paper-400">
-                            <span className="h-px flex-1 bg-ink-700" />
-                            <span>or use email</span>
-                            <span className="h-px flex-1 bg-ink-700" />
+                        <div className="my-6 flex items-center gap-4 text-[10px] font-medium uppercase tracking-[0.2em] text-paper-400/75">
+                            <span className="h-px flex-1 bg-white/9" />
+                            <span>or continue with email</span>
+                            <span className="h-px flex-1 bg-white/9" />
                         </div>
 
-                        {/* Login / Signup form */}
                         <AnimatePresence mode="wait">
                             <motion.form
+                                id="auth-form-panel"
                                 key={mode}
                                 onSubmit={handleSubmit}
-                                initial={{ opacity: 0, x: mode === 'signup' ? 12 : -12 }}
+                                initial={{ opacity: 0, x: mode === 'signup' ? 10 : -10 }}
                                 animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0 }}
+                                exit={{ opacity: 0, x: mode === 'signup' ? -10 : 10 }}
                                 transition={{ duration: 0.2 }}
                                 className="space-y-4"
                             >
                                 {mode === 'signup' && (
-                                    <div className="flex gap-3">
-                                        <div className="flex-1">
-                                            <label className="block text-xs text-paper-400 mb-1.5">First name</label>
+                                    <div className="grid grid-cols-2 gap-3">
+                                        <div>
+                                            <label htmlFor="firstName" className="mb-2 block text-xs font-medium text-paper-400">
+                                                First name
+                                            </label>
                                             <input
+                                                id="firstName"
                                                 required
+                                                autoComplete="given-name"
                                                 name="firstName"
                                                 value={form.firstName}
                                                 onChange={handleChange}
+                                                placeholder="Jane"
                                                 className={inputClass}
                                             />
                                         </div>
-                                        <div className="flex-1">
-                                            <label className="block text-xs text-paper-400 mb-1.5">Last name</label>
+                                        <div>
+                                            <label htmlFor="lastName" className="mb-2 block text-xs font-medium text-paper-400">
+                                                Last name
+                                            </label>
                                             <input
+                                                id="lastName"
                                                 required
+                                                autoComplete="family-name"
                                                 name="lastName"
                                                 value={form.lastName}
                                                 onChange={handleChange}
+                                                placeholder="Doe"
                                                 className={inputClass}
                                             />
                                         </div>
@@ -197,54 +281,66 @@ export default function AuthPage({ onSubmit, onGoogleAuth }) {
                                 )}
 
                                 <div>
-                                    <label className="block text-xs text-paper-400 mb-1.5">Email</label>
+                                    <label htmlFor="email" className="mb-2 block text-xs font-medium text-paper-400">
+                                        Email address
+                                    </label>
                                     <input
+                                        id="email"
                                         required
                                         type="email"
+                                        autoComplete="email"
                                         name="email"
                                         value={form.email}
                                         onChange={handleChange}
+                                        placeholder="you@example.com"
                                         className={inputClass}
                                     />
                                 </div>
 
                                 <div>
-                                    <div className="flex items-center justify-between mb-1.5">
-                                        <label className="block text-xs text-paper-400">Password</label>
-                                        {mode === 'login' && (
-                                            <button type="button" className="text-xs text-ember-400 hover:underline">
-                                                Forgot password?
-                                            </button>
-                                        )}
-                                    </div>
-                                    <div className="relative">
-                                        <input
-                                            required
-                                            type={showPassword ? 'text' : 'password'}
-                                            name="password"
-                                            value={form.password}
-                                            onChange={handleChange}
-                                            className={`${inputClass} pr-16`}
-                                        />
+                                    <div className="mb-2 flex items-center justify-between">
+                                        <label htmlFor="password" className="block text-xs font-medium text-paper-400">
+                                            Password
+                                        </label>
                                         <button
                                             type="button"
+                                            aria-label={showPassword ? 'Hide password' : 'Show password'}
+                                            aria-pressed={showPassword}
                                             onClick={() => setShowPassword(!showPassword)}
-                                            className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-paper-400 hover:text-paper-100"
+                                            className="text-xs text-paper-400 transition-colors hover:text-ember-400"
                                         >
                                             {showPassword ? 'Hide' : 'Show'}
                                         </button>
                                     </div>
+                                    <input
+                                        id="password"
+                                        required
+                                        type={showPassword ? 'text' : 'password'}
+                                        minLength={mode === 'signup' ? 8 : undefined}
+                                        maxLength={128}
+                                        autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
+                                        name="password"
+                                        value={form.password}
+                                        onChange={handleChange}
+                                        placeholder="Enter your password"
+                                        className={inputClass}
+                                    />
                                 </div>
 
                                 {mode === 'signup' && (
                                     <div>
-                                        <label className="block text-xs text-paper-400 mb-1.5">Confirm password</label>
+                                        <label htmlFor="confirmPassword" className="mb-2 block text-xs font-medium text-paper-400">
+                                            Confirm password
+                                        </label>
                                         <input
+                                            id="confirmPassword"
                                             required
                                             type="password"
+                                            autoComplete="new-password"
                                             name="confirmPassword"
                                             value={form.confirmPassword}
                                             onChange={handleChange}
+                                            placeholder="Enter your password again"
                                             className={inputClass}
                                         />
                                     </div>
@@ -253,34 +349,51 @@ export default function AuthPage({ onSubmit, onGoogleAuth }) {
                                 <motion.button
                                     type="submit"
                                     disabled={isSubmitting}
-                                    whileHover={{ scale: 1.02 }}
-                                    whileTap={{ scale: 0.98 }}
-                                    className="w-full bg-ember-400 hover:bg-ember-500 disabled:opacity-60 text-ink-950 font-medium text-sm rounded-md py-2.5 mt-2 transition-colors"
+                                    whileHover={{ y: -1 }}
+                                    whileTap={{ scale: 0.99 }}
+                                    className="auth-primary-button mt-2 flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-ink-950 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                                 >
-                                    {isSubmitting ? 'Please wait...' : mode === 'login' ? 'Log in' : 'Create account'}
+                                    {isSubmitting
+                                        ? 'Please wait...'
+                                        : mode === 'login'
+                                          ? 'Log in to Folio'
+                                          : 'Create your account'}
+                                    {!isSubmitting && <span aria-hidden="true">→</span>}
                                 </motion.button>
 
-                                {message && (
-                                    <p role="alert" className="text-xs text-red-300 text-center pt-1">
-                                        {message}
+                                {feedback && (
+                                    <p
+                                        role={feedback.type === 'error' ? 'alert' : 'status'}
+                                        className={`rounded-lg border px-3 py-2 text-center text-xs ${
+                                            feedback.type === 'error'
+                                                ? 'border-red-400/20 bg-red-400/[0.07] text-red-200'
+                                                : 'border-emerald-400/20 bg-emerald-400/[0.07] text-emerald-200'
+                                        }`}
+                                    >
+                                        {feedback.text}
                                     </p>
                                 )}
                             </motion.form>
                         </AnimatePresence>
+
+                        <p className="mt-6 text-center text-xs leading-5 text-paper-400">
+                            A welcoming space for thoughtful readers and writers.
+                        </p>
                     </motion.div>
 
-                    <p className="text-center text-xs text-paper-400 mt-6">
-                        {mode === 'login' ? "Don't have an account? " : 'Already have an account? '}
+                    <p className="mt-6 text-center text-sm text-paper-400">
+                        {mode === 'login' ? "New to Folio? " : 'Already have an account? '}
                         <button
                             type="button"
                             onClick={() => changeMode(mode === 'login' ? 'signup' : 'login')}
-                            className="text-ember-400 hover:underline"
+                            className="font-medium text-ember-400 transition-colors hover:text-ember-500"
                         >
-                            {mode === 'login' ? 'Sign up' : 'Log in'}
+                            {mode === 'login' ? 'Create an account' : 'Log in'}
                         </button>
                     </p>
-                </div>
+                </motion.div>
             </div>
         </main>
+        </MotionConfig>
     );
 }
